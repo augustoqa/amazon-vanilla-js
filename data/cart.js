@@ -47,3 +47,7 @@ export function removeFromCart(productId) {
 
   saveToStorage()
 }
+
+export function calculateCartQuantity() {
+  return cart.reduce((quantity, cartItem) => quantity + cartItem.quantity, 0)
+}
