@@ -10,28 +10,29 @@ import { formatCurrency } from './utils/money.js'
 import dayjs from 'https://unpkg.com/supersimpledev@8.5.0/dayjs/esm/index.js'
 import { deliveryOptions } from '../data/deliveryOptions.js'
 
-let cartSummaryHTML = ''
+function renderOrderSummary() {
+  let cartSummaryHTML = ''
 
-cart.forEach((cartItem) => {
-  const productId = cartItem.productId
-  let matchingProduct
+  cart.forEach((cartItem) => {
+    const productId = cartItem.productId
+    let matchingProduct
 
-  products.forEach((product) => {
-    if (product.id === productId) {
-      matchingProduct = product
-    }
-  })
+    products.forEach((product) => {
+      if (product.id === productId) {
+        matchingProduct = product
+      }
+    })
 
-  const deliveryOptionId = cartItem.deliveryOptionId
+    const deliveryOptionId = cartItem.deliveryOptionId
 
-  let deliveryOption = deliveryOptions.find(
-    (option) => option.id === deliveryOptionId,
-  )
-  const today = dayjs()
-  const deliveryDate = today.add(deliveryOption.deliveryDays, 'days')
-  const dateString = deliveryDate.format('dddd, MMMM D')
+    let deliveryOption = deliveryOptions.find(
+      (option) => option.id === deliveryOptionId,
+    )
+    const today = dayjs()
+    const deliveryDate = today.add(deliveryOption.deliveryDays, 'days')
+    const dateString = deliveryDate.format('dddd, MMMM D')
 
-  cartSummaryHTML += `
+    cartSummaryHTML += `
   <div class="cart-item-container js-cart-item-container-${matchingProduct.id}">
     <div class="delivery-date">Delivery date: ${dateString}</div>
 
@@ -73,24 +74,24 @@ cart.forEach((cartItem) => {
     </div>
   </div>
   `
-})
+  })
 
-function deliveryOptionsHTML(matchingProduct, cartItem) {
-  let html = ''
+  function deliveryOptionsHTML(matchingProduct, cartItem) {
+    let html = ''
 
-  deliveryOptions.forEach((deliveryOption) => {
-    const today = dayjs()
-    const deliveryDate = today.add(deliveryOption.deliveryDays, 'days')
-    const dateString = deliveryDate.format('dddd, MMMM D')
+    deliveryOptions.forEach((deliveryOption) => {
+      const today = dayjs()
+      const deliveryDate = today.add(deliveryOption.deliveryDays, 'days')
+      const dateString = deliveryDate.format('dddd, MMMM D')
 
-    const priceString =
-      deliveryOption.priceCents === 0
-        ? 'FREE'
-        : `$${formatCurrency(deliveryOption.priceCents)} -`
+      const priceString =
+        deliveryOption.priceCents === 0
+          ? 'FREE'
+          : `$${formatCurrency(deliveryOption.priceCents)} -`
 
-    const isChecked = deliveryOption.id === cartItem.deliveryOptionId
+      const isChecked = deliveryOption.id === cartItem.deliveryOptionId
 
-    html += `
+      html += `
     <div class="delivery-option js-delivery-option" 
       data-product-id="${matchingProduct.id}"
       data-delivery-option-id="${deliveryOption.id}"
@@ -104,118 +105,122 @@ function deliveryOptionsHTML(matchingProduct, cartItem) {
       </div>
     </div>
     `
+    })
+
+    return html
+  }
+
+  function updateCartQuantityDisplay() {
+    document.querySelector('.js-cart-quantity').textContent =
+      `${calculateCartQuantity()} items`
+  }
+
+  document.querySelector('.js-order-summary').innerHTML = cartSummaryHTML
+
+  document.querySelectorAll('.js-delete-link').forEach((link) => {
+    link.addEventListener('click', () => {
+      const productId = link.dataset.productId
+      removeFromCart(productId)
+
+      const container = document.querySelector(
+        `.js-cart-item-container-${productId}`,
+      )
+      container.remove()
+      updateCartQuantityDisplay()
+    })
   })
 
-  return html
-}
+  addEventListener('load', () => {
+    updateCartQuantityDisplay()
+  })
 
-function updateCartQuantityDisplay() {
-  document.querySelector('.js-cart-quantity').textContent =
-    `${calculateCartQuantity()} items`
-}
+  document.querySelectorAll('.js-update-quantity-link').forEach((link) => {
+    link.addEventListener('click', handleUpdateQuantityInput)
+  })
 
-document.querySelector('.js-order-summary').innerHTML = cartSummaryHTML
+  function handleUpdateQuantityInput(event) {
+    document
+      .querySelectorAll('.cart-item-container')
+      .forEach((cont) => cont.classList.remove('is-editing-quantity'))
 
-document.querySelectorAll('.js-delete-link').forEach((link) => {
-  link.addEventListener('click', () => {
-    const productId = link.dataset.productId
-    removeFromCart(productId)
-
+    const productId = event.target.dataset.productId
     const container = document.querySelector(
       `.js-cart-item-container-${productId}`,
     )
-    container.remove()
+    const inputEditing = container.querySelector('.quantity-input')
+    container.classList.add('is-editing-quantity')
+
+    const labelQuantityValue =
+      container.querySelector('.js-quantity-label').textContent
+
+    inputEditing.value = labelQuantityValue
+    inputEditing.setAttribute('placeholder', labelQuantityValue)
+    inputEditing.select()
+
+    container
+      .querySelector('.js-save-quantity-link')
+      .addEventListener('click', handleSaveQuantityLink)
+  }
+
+  function handleSaveQuantityLink() {
+    const productId = this.dataset.productId
+    const container = this.closest(`.js-cart-item-container-${productId}`)
+    const quantityInputValue = container
+      .querySelector('.quantity-input')
+      .value.trim()
+
+    const quantity = Number(quantityInputValue)
+
+    const quantityErrorMessage = container.querySelector(
+      '.js-quantity-error-message',
+    )
+    quantityErrorMessage.textContent = ''
+    quantityErrorMessage.classList.contains('is-visible') &&
+      quantityErrorMessage.classList.remove('is-visible')
+
+    if (quantityInputValue === '') {
+      quantityErrorMessage.classList.add('is-visible')
+      quantityErrorMessage.textContent = 'You must enter a quantity'
+      return
+    }
+
+    if (isNaN(quantity)) {
+      quantityErrorMessage.classList.add('is-visible')
+      quantityErrorMessage.textContent = 'Quantity must be a number'
+      return
+    }
+    if (quantity < 0 || quantity >= 1000) {
+      quantityErrorMessage.classList.add('is-visible')
+      quantityErrorMessage.textContent = 'Quantity must be >= 0 and < 1000'
+      return
+    }
+
+    updateQuantity(productId, quantity)
     updateCartQuantityDisplay()
+    container.querySelector('.js-quantity-label').textContent = quantity
+    container.classList.remove('is-editing-quantity')
+  }
+
+  document.querySelectorAll('.quantity-input').forEach((input) => {
+    input.addEventListener('keydown', handleEnterInput)
   })
-})
 
-addEventListener('load', () => {
-  updateCartQuantityDisplay()
-})
-
-document.querySelectorAll('.js-update-quantity-link').forEach((link) => {
-  link.addEventListener('click', handleUpdateQuantityInput)
-})
-
-function handleUpdateQuantityInput(event) {
-  document
-    .querySelectorAll('.cart-item-container')
-    .forEach((cont) => cont.classList.remove('is-editing-quantity'))
-
-  const productId = event.target.dataset.productId
-  const container = document.querySelector(
-    `.js-cart-item-container-${productId}`,
-  )
-  const inputEditing = container.querySelector('.quantity-input')
-  container.classList.add('is-editing-quantity')
-
-  const labelQuantityValue =
-    container.querySelector('.js-quantity-label').textContent
-
-  inputEditing.value = labelQuantityValue
-  inputEditing.setAttribute('placeholder', labelQuantityValue)
-  inputEditing.select()
-
-  container
-    .querySelector('.js-save-quantity-link')
-    .addEventListener('click', handleSaveQuantityLink)
-}
-
-function handleSaveQuantityLink() {
-  const productId = this.dataset.productId
-  const container = this.closest(`.js-cart-item-container-${productId}`)
-  const quantityInputValue = container
-    .querySelector('.quantity-input')
-    .value.trim()
-
-  const quantity = Number(quantityInputValue)
-
-  const quantityErrorMessage = container.querySelector(
-    '.js-quantity-error-message',
-  )
-  quantityErrorMessage.textContent = ''
-  quantityErrorMessage.classList.contains('is-visible') &&
-    quantityErrorMessage.classList.remove('is-visible')
-
-  if (quantityInputValue === '') {
-    quantityErrorMessage.classList.add('is-visible')
-    quantityErrorMessage.textContent = 'You must enter a quantity'
-    return
+  function handleEnterInput(event) {
+    if (event.key === 'Enter') {
+      event.target
+        .closest('.is-editing-quantity')
+        .querySelector('.save-quantity-link')
+        .click()
+    }
   }
 
-  if (isNaN(quantity)) {
-    quantityErrorMessage.classList.add('is-visible')
-    quantityErrorMessage.textContent = 'Quantity must be a number'
-    return
-  }
-  if (quantity < 0 || quantity >= 1000) {
-    quantityErrorMessage.classList.add('is-visible')
-    quantityErrorMessage.textContent = 'Quantity must be >= 0 and < 1000'
-    return
-  }
-
-  updateQuantity(productId, quantity)
-  updateCartQuantityDisplay()
-  container.querySelector('.js-quantity-label').textContent = quantity
-  container.classList.remove('is-editing-quantity')
-}
-
-document.querySelectorAll('.quantity-input').forEach((input) => {
-  input.addEventListener('keydown', handleEnterInput)
-})
-
-function handleEnterInput(event) {
-  if (event.key === 'Enter') {
-    event.target
-      .closest('.is-editing-quantity')
-      .querySelector('.save-quantity-link')
-      .click()
-  }
-}
-
-document.querySelectorAll('.js-delivery-option').forEach((element) => {
-  element.addEventListener('click', () => {
-    const { productId, deliveryOptionId } = element.dataset
-    updateDeliveryOption(productId, deliveryOptionId)
+  document.querySelectorAll('.js-delivery-option').forEach((element) => {
+    element.addEventListener('click', () => {
+      const { productId, deliveryOptionId } = element.dataset
+      updateDeliveryOption(productId, deliveryOptionId)
+      renderOrderSummary()
+    })
   })
-})
+}
+
+renderOrderSummary()
